@@ -229,19 +229,33 @@ app.get('/api/booking/:reference', async (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
-  let database = false;
+  const checks = { stripe: false, webhook: Boolean(webhookSecret), database: false };
+  const problems = [];
+
   try {
     await db.pool.query('SELECT 1');
-    database = true;
+    checks.database = true;
   } catch (err) {
-    console.error('Health check: database unreachable:', err.message);
+    problems.push(`database: ${err.message}`);
   }
-  res.status(database ? 200 : 503).json({
-    ok: database,
-    stripe: Boolean(stripe),
-    webhook: Boolean(webhookSecret),
-    database,
-  });
+
+  // Presence of a key proves nothing — a key ID or a stale key looks identical
+  // until Stripe rejects it. Make a real (free, read-only) call instead.
+  if (!stripe) {
+    problems.push('stripe: STRIPE_SECRET_KEY is not set');
+  } else {
+    try {
+      await stripe.balance.retrieve();
+      checks.stripe = true;
+    } catch (err) {
+      problems.push(`stripe: ${err.message}`);
+    }
+  }
+
+  if (!checks.webhook) problems.push('webhook: STRIPE_WEBHOOK_SECRET is not set');
+
+  const ok = checks.stripe && checks.database && checks.webhook;
+  res.status(ok ? 200 : 503).json({ ok, ...checks, problems });
 });
 
 app.use(express.static(path.join(__dirname, 'aboardkestrel'), { extensions: ['html'] }));
