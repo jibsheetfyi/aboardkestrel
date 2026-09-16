@@ -28,7 +28,7 @@ async function chargeBalance(booking) {
   const method = methods.data[0];
   if (!method) {
     console.error(`${booking.reference}: no saved card on file.`);
-    db.markBalanceStatus(booking.reference, 'needs_action');
+    await db.markBalanceStatus(booking.reference, 'needs_action');
     return;
   }
 
@@ -49,21 +49,21 @@ async function chargeBalance(booking) {
     );
 
     if (intent.status === 'succeeded') {
-      db.markBalanceStatus(booking.reference, 'paid');
+      await db.markBalanceStatus(booking.reference, 'paid');
       console.log(`${booking.reference}: charged $${booking.balance_cents / 100}.`);
     } else {
-      db.markBalanceStatus(booking.reference, 'needs_action');
+      await db.markBalanceStatus(booking.reference, 'needs_action');
       console.warn(`${booking.reference}: ended in status ${intent.status}.`);
     }
   } catch (err) {
     const code = err.code || (err.raw && err.raw.code);
-    db.markBalanceStatus(booking.reference, 'needs_action');
+    await db.markBalanceStatus(booking.reference, 'needs_action');
     console.error(`${booking.reference}: ${code || err.message}`);
   }
 }
 
 async function main() {
-  const due = db.bookingsWithBalanceDue();
+  const due = await db.bookingsWithBalanceDue();
   if (due.length === 0) {
     console.log('No balances due.');
     return;
@@ -74,7 +74,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then(() => db.pool.end())
+  .catch(async (err) => {
+    console.error(err);
+    await db.pool.end().catch(() => {});
+    process.exit(1);
+  });

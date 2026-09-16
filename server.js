@@ -40,7 +40,7 @@ function reference() {
 
 /* ---------- webhook (must read the raw body, so it precedes express.json) ---------- */
 
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !webhookSecret) return res.status(503).send('Webhooks not configured.');
 
   let event;
@@ -54,7 +54,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      db.markPaid({
+      await db.markPaid({
         sessionId: session.id,
         customerId: typeof session.customer === 'string' ? session.customer : null,
         paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
@@ -64,7 +64,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
     }
 
     if (event.type === 'checkout.session.expired') {
-      db.markAbandoned(event.data.object.id);
+      await db.markAbandoned(event.data.object.id);
     }
   } catch (err) {
     console.error('Webhook handling failed:', err);
@@ -166,24 +166,31 @@ app.post('/api/checkout', async (req, res) => {
       expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
     });
 
-    db.createBooking({
-      reference: ref,
-      sessionId: session.id,
-      customerId: customer.id,
-      experience: experience.id,
-      start: booking.start,
-      end: booking.end,
-      guests: booking.guests,
-      addons: booking.addons.map((a) => a.id).join(','),
-      name,
-      email,
-      phone: String(details.phone || '').trim(),
-      notes: String(details.notes || '').slice(0, 2000),
-      occasion: String(details.occasion || '').slice(0, 80),
-      totalCents: pricing.total * 100,
-      depositCents: pricing.deposit * 100,
-      balanceCents: pricing.balance * 100,
-    });
+    try {
+      await db.createBooking({
+        reference: ref,
+        sessionId: session.id,
+        customerId: customer.id,
+        experience: experience.id,
+        start: booking.start,
+        end: booking.end,
+        guests: booking.guests,
+        addons: booking.addons.map((a) => a.id).join(','),
+        name,
+        email,
+        phone: String(details.phone || '').trim(),
+        notes: String(details.notes || '').slice(0, 2000),
+        occasion: String(details.occasion || '').slice(0, 80),
+        totalCents: pricing.total * 100,
+        depositCents: pricing.deposit * 100,
+        balanceCents: pricing.balance * 100,
+      });
+    } catch (dbErr) {
+      // A guest must never be able to pay for a booking we have no record of.
+      console.error('Booking insert failed; expiring checkout session:', dbErr);
+      await stripe.checkout.sessions.expire(session.id).catch(() => {});
+      return res.status(500).json({ error: 'We could not save your booking. Nothing was charged — please try again.' });
+    }
 
     res.json({ url: session.url, reference: ref });
   } catch (err) {
@@ -194,16 +201,24 @@ app.post('/api/checkout', async (req, res) => {
 
 /* ---------- confirmation lookup ---------- */
 
-app.get('/api/booking/:reference', (req, res) => {
-  const booking = db.getByReference(req.params.reference);
+app.get('/api/booking/:reference', async (req, res) => {
+  let booking;
+  try {
+    booking = await db.getByReference(req.params.reference);
+  } catch (err) {
+    console.error('Booking lookup failed:', err);
+    return res.status(500).json({ error: 'Lookup failed.' });
+  }
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  const day = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v || null);
 
   res.json({
     reference: booking.reference,
     status: booking.status,
     experience: booking.experience,
-    start: booking.start_date,
-    end: booking.end_date,
+    start: day(booking.start_date),
+    end: day(booking.end_date),
     guests: booking.guests,
     addons: booking.addons ? booking.addons.split(',').filter(Boolean) : [],
     email: booking.email,
@@ -213,12 +228,31 @@ app.get('/api/booking/:reference', (req, res) => {
   });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, stripe: Boolean(stripe), webhook: Boolean(webhookSecret) });
+app.get('/api/health', async (req, res) => {
+  let database = false;
+  try {
+    await db.pool.query('SELECT 1');
+    database = true;
+  } catch (err) {
+    console.error('Health check: database unreachable:', err.message);
+  }
+  res.status(database ? 200 : 503).json({
+    ok: database,
+    stripe: Boolean(stripe),
+    webhook: Boolean(webhookSecret),
+    database,
+  });
 });
 
 app.use(express.static(path.join(__dirname, 'aboardkestrel'), { extensions: ['html'] }));
 
-app.listen(PORT, () => {
-  console.log(`Aboard Kestrel listening on ${PORT}`);
-});
+db.init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Aboard Kestrel listening on ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Could not prepare the database:', err);
+    process.exit(1);
+  });

@@ -12,7 +12,7 @@
     "collect-balances": "node jobs/collect-balances.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "pg": "^8.13.1",
     "express": "^4.21.2",
     "stripe": "^17.7.0"
   }
