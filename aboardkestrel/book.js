@@ -76,7 +76,14 @@ function priceLines() {
 
   state.addons.forEach((id) => {
     const a = ADDONS.find((x) => x.id === id);
-    lines.push({ label: a.name, sub: 'Added extra', amount: a.price });
+    if (!a) return;
+    // Per-guest add-ons (menus, wine) scale with the party; must match catalog.js.
+    if (a.per === 'guest') {
+      const n = state.guests || 1;
+      lines.push({ label: a.name, sub: `${fmt(a.price)} \u00d7 ${n} guest${n > 1 ? 's' : ''}`, amount: a.price * n });
+    } else {
+      lines.push({ label: a.name, sub: 'Added extra', amount: a.price });
+    }
   });
 
   const subtotal = lines.reduce((s, l) => s + l.amount, 0);
@@ -274,7 +281,7 @@ function panelAddons() {
             <span class="choice-name">${a.name}</span>
             <span class="choice-desc">${a.desc}</span>
           </span>
-          <span class="choice-price">${fmt(a.price)}<span>per ${a.per}</span></span>
+          <span class="choice-price">${fmt(a.price)}<span>per ${a.per === 'guest' ? 'guest' : 'charter'}</span></span>
         </button>`
       ).join('')}
     </div>
@@ -312,7 +319,7 @@ function panelDetails() {
       <div class="field">
         <label for="occasion">Occasion (optional)</label>
         <select id="occasion" data-field="occasion" data-testid="select-occasion">
-          ${['—', 'Anniversary', 'Birthday', 'Proposal', 'Family trip', 'Client / company', 'Photo or video shoot']
+          ${['—', 'Lunch or meeting', 'Client hosting', 'Holiday party', 'Game day', 'Birthday or milestone', 'Anniversary', 'Team building', 'Sunset with friends', 'Family trip', 'Photo or video shoot', 'Something else']
             .map((o) => `<option ${o === d.occasion ? 'selected' : ''}>${o}</option>`)
             .join('')}
         </select>

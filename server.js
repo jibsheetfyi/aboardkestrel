@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const express = require('express');
 const Stripe = require('stripe');
 
-const { priceBooking } = require('./catalog');
+const { priceBooking, PROPOSALS } = require('./catalog');
 const db = require('./db');
 
 const app = express();
@@ -22,6 +22,14 @@ const PORT = process.env.PORT || 10000;
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const adminToken = process.env.ADMIN_TOKEN;
+
+/*
+ * Live vs test is derived from the key itself rather than a separate flag, so
+ * the two can never disagree. The site shows a test-mode notice whenever this
+ * is false, which is what keeps a real guest from paying into a sandbox.
+ */
+const liveMode = Boolean(stripeKey && stripeKey.startsWith('sk_live_'));
 
 if (!stripe) {
   console.warn('STRIPE_SECRET_KEY is not set — checkout routes will return 503.');
@@ -75,6 +83,154 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json({ limit: '32kb' }));
+
+/* ---------- public config ---------- */
+
+app.get('/api/config', (req, res) => {
+  res.json({ liveMode, payments: Boolean(stripe) });
+});
+
+/* ---------- inquiry (proposal-only experiences) ---------- */
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.post('/api/inquiry', async (req, res) => {
+  const b = req.body || {};
+  const subject = String(b.subject || '').trim();
+  if (!PROPOSALS[subject] && subject !== 'general') {
+    return res.status(400).json({ error: 'Unknown inquiry subject.' });
+  }
+
+  const name = String(b.name || '').trim().slice(0, 120);
+  const email = String(b.email || '').trim().slice(0, 200);
+  if (!name) return res.status(400).json({ error: 'Please tell us your name.' });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'A valid email address is required.' });
+
+  const guests = Number(b.guests);
+  const preferred = /^\d{4}-\d{2}-\d{2}$/.test(String(b.preferred || '')) ? b.preferred : null;
+
+  try {
+    const id = await db.createInquiry({
+      subject,
+      occasion: String(b.occasion || '').slice(0, 80) || null,
+      name,
+      email,
+      phone: String(b.phone || '').trim().slice(0, 40) || null,
+      preferred,
+      guests: Number.isInteger(guests) && guests > 0 && guests < 200 ? guests : null,
+      message: String(b.message || '').slice(0, 4000) || null,
+      production: String(b.production || '').slice(0, 2000) || null,
+    });
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error('Inquiry insert failed:', err);
+    res.status(500).json({ error: 'We could not save your request. Please email the crew directly.' });
+  }
+});
+
+/* ---------- owner tools ---------- */
+
+/*
+ * Timing-safe compare so the token cannot be recovered a character at a time
+ * by measuring how long a wrong guess takes to reject.
+ */
+function tokenOk(supplied) {
+  if (!adminToken || !supplied) return false;
+  const a = Buffer.from(String(supplied));
+  const b = Buffer.from(adminToken);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireOwner(req, res, next) {
+  if (!adminToken) return res.status(503).json({ error: 'Owner tools are not configured.' });
+  const header = req.get('authorization') || '';
+  const supplied = header.startsWith('Bearer ') ? header.slice(7) : req.get('x-admin-token');
+  if (!tokenOk(supplied)) return res.status(401).json({ error: 'Not authorized.' });
+  next();
+}
+
+const day = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v || null);
+
+app.get('/api/admin/overview', requireOwner, async (req, res) => {
+  try {
+    const [totals, bookings, inquiries, due] = await Promise.all([
+      db.summary(),
+      db.listBookings(200),
+      db.listInquiries(100),
+      db.bookingsWithBalanceDue(),
+    ]);
+
+    res.json({
+      liveMode,
+      totals: {
+        confirmed: Number(totals.confirmed),
+        pending: Number(totals.pending),
+        upcoming: Number(totals.upcoming),
+        newInquiries: Number(totals.new_inquiries),
+        booked: Number(totals.booked_cents) / 100,
+        collected: Number(totals.collected_cents) / 100,
+        outstanding: Number(totals.outstanding_cents) / 100,
+      },
+      balancesDue: due.map((b) => ({
+        reference: b.reference,
+        start: day(b.start_date),
+        amount: b.balance_cents / 100,
+        name: b.name,
+      })),
+      bookings: bookings.map((b) => ({
+        reference: b.reference,
+        status: b.status,
+        experience: b.experience,
+        start: day(b.start_date),
+        end: day(b.end_date),
+        guests: b.guests,
+        addons: b.addons ? b.addons.split(',').filter(Boolean) : [],
+        name: b.name,
+        email: b.email,
+        phone: b.phone,
+        occasion: b.occasion,
+        notes: b.notes,
+        total: b.total_cents / 100,
+        deposit: b.deposit_cents / 100,
+        balance: b.balance_cents / 100,
+        balanceStatus: b.balance_status,
+        createdAt: b.created_at,
+        paidAt: b.paid_at,
+      })),
+      inquiries: inquiries.map((q) => ({
+        id: Number(q.id),
+        subject: q.subject,
+        occasion: q.occasion,
+        status: q.status,
+        name: q.name,
+        email: q.email,
+        phone: q.phone,
+        preferred: day(q.preferred),
+        guests: q.guests,
+        message: q.message,
+        production: q.production,
+        createdAt: q.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('Admin overview failed:', err);
+    res.status(500).json({ error: 'Could not load the dashboard.' });
+  }
+});
+
+app.post('/api/admin/inquiry/:id/status', requireOwner, async (req, res) => {
+  const status = String((req.body || {}).status || '');
+  if (!['new', 'quoted', 'won', 'closed'].includes(status)) {
+    return res.status(400).json({ error: 'Unknown status.' });
+  }
+  try {
+    await db.setInquiryStatus(Number(req.params.id), status);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Inquiry status update failed:', err);
+    res.status(500).json({ error: 'Update failed.' });
+  }
+});
 
 /* ---------- quote ---------- */
 
@@ -216,8 +372,6 @@ app.get('/api/booking/:reference', async (req, res) => {
   }
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  const day = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v || null);
-
   res.json({
     reference: booking.reference,
     status: booking.status,
@@ -260,7 +414,7 @@ app.get('/api/health', async (req, res) => {
   if (!checks.webhook) problems.push('webhook: STRIPE_WEBHOOK_SECRET is not set');
 
   const ok = checks.stripe && checks.database && checks.webhook;
-  res.status(ok ? 200 : 503).json({ ok, ...checks, problems });
+  res.status(ok ? 200 : 503).json({ ok, mode: liveMode ? 'live' : 'test', ownerTools: Boolean(adminToken), ...checks, problems });
 });
 
 app.use(express.static(path.join(__dirname, 'aboardkestrel'), { extensions: ['html'] }));

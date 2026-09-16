@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Owner tools — Kestrel</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23145b63'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { background: var(--color-surface); }
+      .owner-wrap { max-width: var(--content-wide); margin: 0 auto; padding: var(--space-10) var(--space-6) var(--space-24); }
+      .owner-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-6); flex-wrap: wrap; margin-bottom: var(--space-8); }
+      .owner-top h1 { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 400; }
+      .mode-pill { font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; padding: .35rem .8rem; border-radius: 999px; border: 1px solid var(--color-border); }
+      .mode-live { background: #145b63; color: #fff; border-color: #145b63; }
+      .mode-test { background: var(--color-brass-soft, #c49a5a); color: #2a1e08; border-color: transparent; }
+
+      .gate { max-width: 420px; margin: 12vh auto; padding: var(--space-8); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+      .gate h1 { font-family: var(--font-display); font-weight: 400; font-size: var(--text-xl); margin-bottom: var(--space-3); }
+
+      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); margin-bottom: var(--space-10); }
+      .kpi { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-6); }
+      .kpi dt { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-muted); }
+      .kpi dd { font-family: var(--font-display); font-size: var(--text-xl); margin-top: var(--space-2); }
+      .kpi .kpi-sub { font-family: var(--font-body); font-size: var(--text-xs); color: var(--color-text-muted); display: block; margin-top: var(--space-1); }
+
+      .panel { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-6); margin-bottom: var(--space-8); }
+      .panel h2 { font-family: var(--font-display); font-weight: 400; font-size: var(--text-lg); margin-bottom: var(--space-5); }
+      .owner-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+      .owner-table th { text-align: left; font-weight: 500; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
+      .owner-table td { padding: var(--space-4) var(--space-3) var(--space-4) 0; border-bottom: 1px solid var(--color-divider); vertical-align: top; }
+      .owner-table tr:last-child td { border-bottom: 0; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .tag { display: inline-block; font-size: var(--text-xs); padding: .18rem .55rem; border-radius: 999px; border: 1px solid var(--color-border); white-space: nowrap; }
+      .tag-confirmed { background: rgba(20, 91, 99, .12); border-color: rgba(20, 91, 99, .35); }
+      .tag-pending, .tag-new { background: rgba(154, 111, 44, .14); border-color: rgba(154, 111, 44, .38); }
+      .tag-unpaid { background: rgba(154, 111, 44, .14); border-color: rgba(154, 111, 44, .38); }
+      .empty { color: var(--color-text-muted); font-size: var(--text-sm); padding: var(--space-5) 0; }
+      .row-note { color: var(--color-text-muted); font-size: var(--text-xs); display: block; margin-top: 3px; max-width: 46ch; }
+      .status-select { font: inherit; font-size: var(--text-xs); padding: .25rem .4rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); }
+      @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } .panel { overflow-x: auto; } }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <form class="gate" id="gate">
+        <h1>Owner tools</h1>
+        <p class="small muted" style="margin-bottom: var(--space-6)">Enter the owner passphrase to see bookings, payments, and inquiries.</p>
+        <div class="field">
+          <label for="token">Passphrase</label>
+          <input id="token" type="password" autocomplete="current-password" autofocus />
+        </div>
+        <p class="small" id="gate-error" style="color: #a4342b; min-height: 1.2em; margin: var(--space-3) 0"></p>
+        <button class="btn btn-primary btn-lg" type="submit" style="width: 100%">Open dashboard</button>
+      </form>
+    </div>
+
+    <script src="shared.js"></script>
+    <script>
+      /*
+       * The passphrase lives only in this page's memory for the life of the tab.
+       * It is never written to storage, so a shared or stolen laptop does not
+       * leave a working key behind, and a reload simply asks again.
+       */
+      let TOKEN = null;
+
+      const money = (n) =>
+        n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+      const when = (iso) =>
+        iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+      const expName = (id) => {
+        const e = EXPERIENCES.find((x) => x.id === id);
+        const p = PROPOSALS.find((x) => x.id === id);
+        return (e && e.name) || (p && p.name) || id;
+      };
+
+      async function api(path, options) {
+        const res = await fetch(path, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+        });
+        if (res.status === 401) throw new Error('That passphrase was not accepted.');
+        if (res.status === 503) throw new Error('Owner tools are not configured on the server yet.');
+        if (!res.ok) throw new Error('The server returned an error.');
+        return res.json();
+      }
+
+      document.getElementById('gate').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const err = document.getElementById('gate-error');
+        err.textContent = '';
+        TOKEN = document.getElementById('token').value;
+        try {
+          const data = await api('/api/admin/overview');
+          render(data);
+        } catch (e) {
+          TOKEN = null;
+          err.textContent = e.message;
+        }
+      });
+
+      function render(d) {
+        const t = d.totals;
+        document.getElementById('app').innerHTML = `
+          <div class="owner-wrap">
+            <div class="owner-top">
+              <h1>Kestrel — owner tools</h1>
+              <span class="mode-pill ${d.liveMode ? 'mode-live' : 'mode-test'}">
+                ${d.liveMode ? 'Live payments' : 'Test mode — no real charges'}
+              </span>
+            </div>
+
+            <dl class="kpis">
+              <div class="kpi"><dt>Booked</dt><dd>${money(t.booked)}<span class="kpi-sub">${t.confirmed} confirmed booking${t.confirmed === 1 ? '' : 's'}</span></dd></div>
+              <div class="kpi"><dt>Collected</dt><dd>${money(t.collected)}<span class="kpi-sub">deposits received</span></dd></div>
+              <div class="kpi"><dt>Outstanding</dt><dd>${money(t.outstanding)}<span class="kpi-sub">balances still to charge</span></dd></div>
+              <div class="kpi"><dt>Upcoming</dt><dd>${t.upcoming}<span class="kpi-sub">${t.newInquiries} new inquir${t.newInquiries === 1 ? 'y' : 'ies'}</span></dd></div>
+            </dl>
+
+            <section class="panel">
+              <h2>Balances due</h2>
+              ${
+                d.balancesDue.length
+                  ? `<table class="owner-table">
+                      <thead><tr><th>Reference</th><th>Guest</th><th>Charter date</th><th class="num">Balance</th></tr></thead>
+                      <tbody>${d.balancesDue
+                        .map(
+                          (b) => `<tr>
+                            <td><strong>${esc(b.reference)}</strong></td>
+                            <td>${esc(b.name || '—')}</td>
+                            <td>${when(b.start)}</td>
+                            <td class="num">${money(b.amount)}</td>
+                          </tr>`
+                        )
+                        .join('')}</tbody>
+                    </table>
+                    <p class="row-note" style="margin-top: var(--space-4)">The nightly job charges these automatically seven days before departure.</p>`
+                  : '<p class="empty">Nothing due in the next seven days.</p>'
+              }
+            </section>
+
+            <section class="panel">
+              <h2>Bookings</h2>
+              ${
+                d.bookings.length
+                  ? `<table class="owner-table">
+                      <thead><tr><th>Reference</th><th>Charter</th><th>Dates</th><th>Guest</th><th class="num">Total</th><th class="num">Balance</th></tr></thead>
+                      <tbody>${d.bookings
+                        .map(
+                          (b) => `<tr>
+                            <td>
+                              <strong>${esc(b.reference)}</strong>
+                              <span class="row-note"><span class="tag tag-${esc(b.status)}">${esc(b.status)}</span> booked ${when(b.createdAt)}</span>
+                            </td>
+                            <td>
+                              ${esc(expName(b.experience))}
+                              <span class="row-note">${b.guests} guest${b.guests === 1 ? '' : 's'}${b.occasion && b.occasion !== '—' ? ' · ' + esc(b.occasion) : ''}${b.addons.length ? ' · ' + b.addons.length + ' add-on' + (b.addons.length === 1 ? '' : 's') : ''}</span>
+                            </td>
+                            <td>${when(b.start)}${b.end ? '<span class="row-note">to ' + when(b.end) + '</span>' : ''}</td>
+                            <td>
+                              ${esc(b.name || '—')}
+                              <span class="row-note">${esc(b.email || '')}${b.phone ? ' · ' + esc(b.phone) : ''}</span>
+                              ${b.notes ? `<span class="row-note">${esc(b.notes)}</span>` : ''}
+                            </td>
+                            <td class="num">${money(b.total)}</td>
+                            <td class="num">${
+                              b.balanceStatus === 'paid'
+                                ? '<span class="tag">paid</span>'
+                                : `<span class="tag tag-unpaid">${money(b.balance)}</span>`
+                            }</td>
+                          </tr>`
+                        )
+                        .join('')}</tbody>
+                    </table>`
+                  : '<p class="empty">No bookings yet.</p>'
+              }
+            </section>
+
+            <section class="panel">
+              <h2>Proposal requests</h2>
+              ${
+                d.inquiries.length
+                  ? `<table class="owner-table">
+                      <thead><tr><th>Received</th><th>About</th><th>Contact</th><th>Brief</th><th>Status</th></tr></thead>
+                      <tbody>${d.inquiries
+                        .map(
+                          (q) => `<tr>
+                            <td>${when(q.createdAt)}</td>
+                            <td>
+                              ${esc(expName(q.subject))}
+                              <span class="row-note">${q.preferred ? when(q.preferred) : 'no date given'}${q.guests ? ' · ' + q.guests + ' guests' : ''}${q.occasion ? ' · ' + esc(q.occasion) : ''}</span>
+                            </td>
+                            <td>
+                              ${esc(q.name)}
+                              <span class="row-note"><a href="mailto:${esc(q.email)}">${esc(q.email)}</a>${q.phone ? ' · ' + esc(q.phone) : ''}</span>
+                            </td>
+                            <td><span class="row-note" style="margin-top:0">${esc(q.message || '—')}</span></td>
+                            <td>
+                              <select class="status-select" data-inquiry="${q.id}">
+                                ${['new', 'quoted', 'won', 'closed']
+                                  .map((s) => `<option value="${s}" ${s === q.status ? 'selected' : ''}>${s}</option>`)
+                                  .join('')}
+                              </select>
+                            </td>
+                          </tr>`
+                        )
+                        .join('')}</tbody>
+                    </table>`
+                  : '<p class="empty">No proposal requests yet.</p>'
+              }
+            </section>
+
+            <p class="small muted">
+              <a href="index.html">Back to the site</a> · <a href="/api/health">Service health</a>
+            </p>
+          </div>`;
+
+        document.querySelectorAll('[data-inquiry]').forEach((sel) =>
+          sel.addEventListener('change', async () => {
+            const previous = sel.dataset.previous || sel.options[sel.selectedIndex].value;
+            try {
+              await api(`/api/admin/inquiry/${sel.dataset.inquiry}/status`, {
+                method: 'POST',
+                body: JSON.stringify({ status: sel.value }),
+              });
+              sel.dataset.previous = sel.value;
+            } catch (e) {
+              // Put the control back where it was rather than showing a state
+              // the database does not actually have.
+              sel.value = previous;
+              alert(e.message);
+            }
+          })
+        );
+      }
+    </script>
+  </body>
+</html>

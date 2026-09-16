@@ -51,7 +51,76 @@ async function init() {
     );
     CREATE INDEX IF NOT EXISTS idx_bookings_start ON bookings (start_date);
     CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings (status);
+
+    CREATE TABLE IF NOT EXISTS inquiries (
+      id          BIGSERIAL PRIMARY KEY,
+      subject     TEXT NOT NULL,
+      occasion    TEXT,
+      name        TEXT NOT NULL,
+      email       TEXT NOT NULL,
+      phone       TEXT,
+      preferred   DATE,
+      guests      INTEGER,
+      message     TEXT,
+      production  TEXT,
+      status      TEXT NOT NULL DEFAULT 'new',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_inquiries_status ON inquiries (status, created_at DESC);
   `);
+}
+
+async function createInquiry(q) {
+  const { rows } = await pool.query(
+    `INSERT INTO inquiries (subject, occasion, name, email, phone, preferred, guests, message, production)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [q.subject, q.occasion, q.name, q.email, q.phone, q.preferred, q.guests, q.message, q.production]
+  );
+  return rows[0].id;
+}
+
+async function listInquiries(limit = 100) {
+  const { rows } = await pool.query(
+    `SELECT * FROM inquiries ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function setInquiryStatus(id, status) {
+  await pool.query(`UPDATE inquiries SET status = $2 WHERE id = $1`, [id, status]);
+}
+
+/* Owner dashboard: every booking, newest first. */
+async function listBookings(limit = 200) {
+  const { rows } = await pool.query(
+    `SELECT * FROM bookings ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+/*
+ * Headline numbers. Only confirmed bookings count as revenue — a pending row
+ * is a checkout someone opened and may never finish, and counting those would
+ * overstate the season.
+ */
+async function summary() {
+  const { rows } = await pool.query(`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'confirmed')                                    AS confirmed,
+      COUNT(*) FILTER (WHERE status = 'pending')                                      AS pending,
+      COUNT(*) FILTER (WHERE status = 'confirmed' AND start_date >= CURRENT_DATE)     AS upcoming,
+      COALESCE(SUM(total_cents)   FILTER (WHERE status = 'confirmed'), 0)             AS booked_cents,
+      COALESCE(SUM(deposit_cents) FILTER (WHERE status = 'confirmed'), 0)             AS collected_cents,
+      COALESCE(SUM(balance_cents) FILTER (WHERE status = 'confirmed'
+                                            AND balance_status = 'unpaid'), 0)        AS outstanding_cents
+    FROM bookings
+  `);
+  const { rows: inq } = await pool.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'new') AS new_inquiries FROM inquiries`
+  );
+  return { ...rows[0], ...inq[0] };
 }
 
 async function createBooking(b) {
@@ -128,4 +197,9 @@ module.exports = {
   bookingsWithBalanceDue,
   markBalanceStatus,
   bookedRanges,
+  createInquiry,
+  listInquiries,
+  setInquiryStatus,
+  listBookings,
+  summary,
 };

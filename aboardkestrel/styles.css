@@ -388,3 +388,215 @@ a, button, input, textarea, select, [role='button'] {
   .hero-body { padding-block: var(--space-12) var(--space-10); }
   .hero .lede { font-size: var(--text-base); }
 }
+
+/* ============================================================
+   v3 — pillars, occasion router, menus, inquiry, admin
+   ============================================================ */
+
+.pillar-grid {
+  margin-top: var(--space-8);
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(3, 1fr);
+}
+.pillar {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+.pillar-figure {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.pillar-figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.pillar:hover .pillar-figure img { transform: scale(1.04); }
+.pillar-body { padding: var(--space-6); }
+.pillar-body h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 400;
+  margin: 0;
+}
+.pillar-line {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+}
+
+/* occasion router */
+
+.occasion-chips {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.chip {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 0.62rem 1.05rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.chip:hover { border-color: var(--color-primary); }
+.chip.is-on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.occasion-result:empty { display: none; }
+.occasion-panel {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
+.occasion-h {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  margin: var(--space-5) 0 var(--space-4);
+}
+.occasion-panel .eyebrow + .occasion-h { margin-top: var(--space-4); }
+.occasion-list { display: grid; gap: var(--space-3); }
+.occasion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s, background 0.2s;
+}
+.occasion-item:hover { border-color: var(--color-primary); background: var(--color-surface); }
+.occasion-item span { display: flex; flex-direction: column; gap: 2px; }
+.occasion-item em {
+  font-style: normal;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.occasion-price {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  white-space: nowrap;
+  text-align: right;
+}
+.occasion-price i { font-style: normal; font-size: var(--text-sm); color: var(--color-text-muted); }
+
+/* the kestrel table */
+
+.menu-grid {
+  margin-top: var(--space-8);
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(2, 1fr);
+}
+.menu-card {
+  padding: var(--space-6);
+  border: 1px solid rgba(236, 231, 218, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+}
+.menu-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.menu-card h4 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  margin: 0;
+}
+.menu-price { font-family: var(--font-display); font-size: var(--text-lg); }
+.menu-card ul {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+.menu-card li {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  padding-left: 1.1rem;
+  position: relative;
+  opacity: 0.88;
+}
+.menu-card li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+.wine-strip {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  border-top: 1px solid rgba(236, 231, 218, 0.18);
+}
+.wine-strip h4 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  margin: 0 0 var(--space-5);
+}
+.wine-rows { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, 1fr); }
+.wine-row { display: flex; flex-direction: column; gap: 3px; font-size: var(--text-sm); }
+.wine-row span { opacity: 0.78; }
+
+/* inquiry form */
+
+.inquiry-form {
+  margin-top: var(--space-8);
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(2, 1fr);
+}
+.inquiry-form .field-full { grid-column: 1 / -1; }
+.inquiry-submit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+.inquiry-submit p { margin: 0; }
+
+@media (max-width: 900px) {
+  .pillar-grid,
+  .menu-grid,
+  .wine-rows,
+  .inquiry-form { grid-template-columns: 1fr; }
+  .occasion-item { flex-direction: column; align-items: flex-start; }
+  .occasion-price { text-align: left; }
+}
+
+/* Proposal cards carry a plain-language note, not the uppercase meta strip. */
+.exp-note {
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
