@@ -214,3 +214,9 @@ function initChrome() {
   );
   document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 }
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}

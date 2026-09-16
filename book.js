@@ -289,17 +289,17 @@ function panelDetails() {
     <div class="field-grid">
       <div class="field">
         <label for="name">Full name</label>
-        <input id="name" data-field="name" value="${d.name}" placeholder="Ryan Kelly" data-testid="input-name" />
+        <input id="name" data-field="name" value="${esc(d.name)}" placeholder="Ryan Kelly" data-testid="input-name" />
         ${err.name ? `<span class="field-error">${err.name}</span>` : ''}
       </div>
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" type="email" data-field="email" value="${d.email}" placeholder="you@example.com" data-testid="input-email" />
+        <input id="email" type="email" data-field="email" value="${esc(d.email)}" placeholder="you@example.com" data-testid="input-email" />
         ${err.email ? `<span class="field-error">${err.email}</span>` : ''}
       </div>
       <div class="field">
         <label for="phone">Mobile</label>
-        <input id="phone" data-field="phone" value="${d.phone}" placeholder="(310) 555-0142" data-testid="input-phone" />
+        <input id="phone" data-field="phone" value="${esc(d.phone)}" placeholder="(310) 555-0142" data-testid="input-phone" />
         ${err.phone ? `<span class="field-error">${err.phone}</span>` : ''}
       </div>
       <div class="field">
@@ -312,7 +312,7 @@ function panelDetails() {
       </div>
       <div class="field field-full">
         <label for="notes">Anything the crew should know?</label>
-        <textarea id="notes" rows="3" data-field="notes" placeholder="Dietary needs, kids aboard, someone who wants to learn to helm…" data-testid="input-notes">${d.notes}</textarea>
+        <textarea id="notes" rows="3" data-field="notes" placeholder="Dietary needs, kids aboard, someone who wants to learn to helm…" data-testid="input-notes">${esc(d.notes)}</textarea>
       </div>
     </div>
     <div class="step-actions">
@@ -336,27 +336,27 @@ function panelPayment() {
     <div class="field-grid">
       <div class="field field-full">
         <label for="card">Card number</label>
-        <input id="card" data-field="card" data-pay value="${v.card}" inputmode="numeric" placeholder="4242 4242 4242 4242" data-testid="input-card" />
+        <input id="card" data-field="card" data-pay value="${esc(v.card)}" inputmode="numeric" placeholder="4242 4242 4242 4242" data-testid="input-card" />
         ${err.card ? `<span class="field-error">${err.card}</span>` : ''}
       </div>
       <div class="field">
         <label for="exp">Expiry</label>
-        <input id="exp" data-field="exp" data-pay value="${v.exp}" placeholder="04 / 29" data-testid="input-exp" />
+        <input id="exp" data-field="exp" data-pay value="${esc(v.exp)}" placeholder="04 / 29" data-testid="input-exp" />
         ${err.exp ? `<span class="field-error">${err.exp}</span>` : ''}
       </div>
       <div class="field">
         <label for="cvc">CVC</label>
-        <input id="cvc" data-field="cvc" data-pay value="${v.cvc}" inputmode="numeric" placeholder="123" data-testid="input-cvc" />
+        <input id="cvc" data-field="cvc" data-pay value="${esc(v.cvc)}" inputmode="numeric" placeholder="123" data-testid="input-cvc" />
         ${err.cvc ? `<span class="field-error">${err.cvc}</span>` : ''}
       </div>
       <div class="field">
         <label for="zip">Billing ZIP</label>
-        <input id="zip" data-field="zip" data-pay value="${v.zip}" inputmode="numeric" placeholder="90292" data-testid="input-zip" />
+        <input id="zip" data-field="zip" data-pay value="${esc(v.zip)}" inputmode="numeric" placeholder="90292" data-testid="input-zip" />
         ${err.zip ? `<span class="field-error">${err.zip}</span>` : ''}
       </div>
       <div class="field">
         <label for="cardname">Name on card</label>
-        <input id="cardname" data-field="name" data-pay value="${v.name}" placeholder="${state.details.name || 'Ryan Kelly'}" data-testid="input-cardname" />
+        <input id="cardname" data-field="name" data-pay value="${esc(v.name)}" placeholder="${esc(state.details.name || 'Ryan Kelly')}" data-testid="input-cardname" />
       </div>
     </div>
     <div class="notice">
@@ -394,7 +394,7 @@ function panelConfirm() {
     <h2 style="margin-top: var(--space-3)">You are on the calendar.</h2>
     <p class="confirm-ref">${state.ref}</p>
     <p class="small muted" style="margin: var(--space-5) auto 0; max-width: 46ch">
-      A confirmation is on its way to ${state.details.email || 'your inbox'}. Captain Marc will call within a day to sort
+      A confirmation is on its way to ${esc(state.details.email || 'your inbox')}. Captain Marc will call within a day to sort
       out timing, provisioning, and anything else. Kestrel lives in Basin D — parking passes come with your charter.
     </p>
     <div class="receipt">
