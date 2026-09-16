@@ -3,6 +3,7 @@
 const STEPS = ['Experience', 'Dates', 'Extras', 'Guest details', 'Payment'];
 
 const state = {
+  booking: null,
   step: 0,
   expId: 'dockside',
   start: null, // Date
@@ -11,7 +12,6 @@ const state = {
   addons: [],
   cal: startOfMonth(new Date()),
   details: { name: '', email: '', phone: '', occasion: '', notes: '' },
-  pay: { card: '', exp: '', cvc: '', zip: '', name: '' },
   errors: {},
   processing: false,
   ref: null,
@@ -23,6 +23,13 @@ function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function sameDay(a, b) { return a && b && a.toDateString() === b.toDateString(); }
 function nights(a, b) { return Math.round((b - a) / 86400000); }
+function parseIso(v) {
+  const [y, m, d] = String(v).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function fmtDate(d, opts) {
   return d ? d.toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric' }) : '—';
 }
@@ -324,7 +331,6 @@ function panelDetails() {
 
 function panelPayment() {
   const p = priceLines();
-  const v = state.pay;
   const err = state.errors;
   return `
   <section class="panel">
@@ -333,91 +339,88 @@ function panelPayment() {
     <p class="small muted" style="margin-top: var(--space-3)">
       ${fmt(p.deposit)} due now, ${fmt(p.total - p.deposit)} charged seven days before departure.
     </p>
-    <div class="field-grid">
-      <div class="field field-full">
-        <label for="card">Card number</label>
-        <input id="card" data-field="card" data-pay value="${esc(v.card)}" inputmode="numeric" placeholder="4242 4242 4242 4242" data-testid="input-card" />
-        ${err.card ? `<span class="field-error">${err.card}</span>` : ''}
-      </div>
-      <div class="field">
-        <label for="exp">Expiry</label>
-        <input id="exp" data-field="exp" data-pay value="${esc(v.exp)}" placeholder="04 / 29" data-testid="input-exp" />
-        ${err.exp ? `<span class="field-error">${err.exp}</span>` : ''}
-      </div>
-      <div class="field">
-        <label for="cvc">CVC</label>
-        <input id="cvc" data-field="cvc" data-pay value="${esc(v.cvc)}" inputmode="numeric" placeholder="123" data-testid="input-cvc" />
-        ${err.cvc ? `<span class="field-error">${err.cvc}</span>` : ''}
-      </div>
-      <div class="field">
-        <label for="zip">Billing ZIP</label>
-        <input id="zip" data-field="zip" data-pay value="${esc(v.zip)}" inputmode="numeric" placeholder="90292" data-testid="input-zip" />
-        ${err.zip ? `<span class="field-error">${err.zip}</span>` : ''}
-      </div>
-      <div class="field">
-        <label for="cardname">Name on card</label>
-        <input id="cardname" data-field="name" data-pay value="${esc(v.name)}" placeholder="${esc(state.details.name || 'Ryan Kelly')}" data-testid="input-cardname" />
-      </div>
+
+    <div class="pay-review">
+      <div class="line"><span>${esc(exp().name)}</span><span>${fmt(p.total)}</span></div>
+      <div class="line line-sub"><span>Deposit due now (30%)</span><span>${fmt(p.deposit)}</span></div>
+      <div class="line line-sub"><span>Balance, 7 days before departure</span><span>${fmt(p.total - p.deposit)}</span></div>
     </div>
+
     <div class="notice">
-      <span>🔒</span>
+      <span>&#128274;</span>
       <span>
-        This is a demonstration checkout — no card is charged and no data leaves the page. Any 16-digit number works, or
-        use 4242 4242 4242 4242.
+        Card details are entered on Stripe&rsquo;s secure checkout page &mdash; they never touch this site. Your card is
+        saved so the balance can be charged automatically before you sail.
       </span>
     </div>
+
+    ${err.checkout ? `<p class="field-error" style="margin-top: var(--space-4)" data-testid="error-checkout">${esc(err.checkout)}</p>` : ''}
+
     <div class="step-actions">
       <button class="btn btn-ghost" data-back ${state.processing ? 'disabled' : ''} data-testid="button-back-5">Back</button>
       <button class="btn btn-primary btn-lg" data-pay-submit ${state.processing ? 'disabled' : ''} data-testid="button-pay">
-        ${state.processing ? '<span class="spinner"></span> Authorizing…' : `Pay ${fmt(p.deposit)} deposit`}
+        ${state.processing ? '<span class="spinner"></span> Opening secure checkout&hellip;' : `Pay ${fmt(p.deposit)} deposit`}
       </button>
     </div>
   </section>`;
 }
 
 function panelConfirm() {
-  const e = exp();
-  const p = priceLines();
-  const dates =
-    e.kind === 'nightly'
-      ? `${fmtDate(state.start, { weekday: 'long', month: 'long', day: 'numeric' })} → ${fmtDate(state.end, { weekday: 'long', month: 'long', day: 'numeric' })}`
-      : e.kind === 'voyage'
-        ? `${fmtDate(state.start, { weekday: 'long', month: 'long', day: 'numeric' })} → ${fmtDate(addDays(state.start, 2), { weekday: 'long', month: 'long', day: 'numeric' })}`
-        : fmtDate(state.start, { weekday: 'long', month: 'long', day: 'numeric' });
+  const b = state.booking;
+  if (!b) {
+    return `
+  <section class="panel confirm" data-testid="status-loading">
+    <p class="eyebrow">One moment</p>
+    <h2 style="margin-top: var(--space-3)">Confirming your deposit&hellip;</h2>
+    <p class="small muted" style="margin: var(--space-5) auto 0; max-width: 46ch">
+      <span class="spinner"></span> Checking with the payment processor.
+    </p>
+  </section>`;
+  }
+
+  const paid = b.status === 'confirmed';
+  const meta = EXPERIENCES.find((e) => e.id === b.experience);
+  const name = meta ? meta.name : b.experience;
+  const extras = b.addons
+    .map((id) => (ADDONS.find((a) => a.id === id) || {}).name)
+    .filter(Boolean)
+    .join(', ');
+  const dates = b.end
+    ? `${fmtDate(parseIso(b.start), { weekday: 'long', month: 'long', day: 'numeric' })} \u2192 ${fmtDate(parseIso(b.end), { weekday: 'long', month: 'long', day: 'numeric' })}`
+    : fmtDate(parseIso(b.start), { weekday: 'long', month: 'long', day: 'numeric' });
 
   return `
-  <section class="panel confirm" data-testid="status-confirmed">
+  <section class="panel confirm" data-testid="${paid ? 'status-confirmed' : 'status-pending'}">
     <div class="confirm-mark">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12.5l5 5L20 6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
-    <p class="eyebrow">Deposit authorized</p>
-    <h2 style="margin-top: var(--space-3)">You are on the calendar.</h2>
-    <p class="confirm-ref">${state.ref}</p>
+    <p class="eyebrow">${paid ? 'Deposit received' : 'Deposit processing'}</p>
+    <h2 style="margin-top: var(--space-3)">${paid ? 'You are on the calendar.' : 'Almost there.'}</h2>
+    <p class="confirm-ref">${esc(b.reference)}</p>
     <p class="small muted" style="margin: var(--space-5) auto 0; max-width: 46ch">
-      A confirmation is on its way to ${esc(state.details.email || 'your inbox')}. Captain Marc will call within a day to sort
-      out timing, provisioning, and anything else. Kestrel lives in Basin D — parking passes come with your charter.
+      ${paid
+        ? `A confirmation is on its way to ${esc(b.email || 'your inbox')}. Captain Marc will call within a day to sort out timing, provisioning, and anything else. Kestrel lives in Basin D &mdash; parking passes come with your charter.`
+        : 'Your payment went through and we are waiting on final confirmation from the processor. This page updates on its own; nothing more is needed from you.'}
     </p>
     <div class="receipt">
       <div class="summary-lines">
-        <div class="line"><span>Experience</span><span>${e.name}</span></div>
+        <div class="line"><span>Experience</span><span>${esc(name)}</span></div>
         <div class="line"><span>Dates</span><span>${dates}</span></div>
-        <div class="line"><span>Guests</span><span>${state.guests}</span></div>
-        ${state.addons.length ? `<div class="line"><span>Extras</span><span>${state.addons.map((id) => ADDONS.find((a) => a.id === id).name).join(', ')}</span></div>` : ''}
+        <div class="line"><span>Guests</span><span>${b.guests}</span></div>
+        ${extras ? `<div class="line"><span>Extras</span><span>${esc(extras)}</span></div>` : ''}
       </div>
       <div class="summary-total">
-        <div class="line"><strong>Charter total</strong><strong>${fmt(p.total)}</strong></div>
-        <div class="line line-sub"><span>Deposit paid today</span><span>${fmt(p.deposit)}</span></div>
-        <div class="line line-sub"><span>Balance due 7 days out</span><span>${fmt(p.total - p.deposit)}</span></div>
+        <div class="line"><strong>Charter total</strong><strong>${fmt(b.total)}</strong></div>
+        <div class="line line-sub"><span>Deposit paid</span><span>${fmt(b.deposit)}</span></div>
+        <div class="line line-sub"><span>Balance, 7 days before departure</span><span>${fmt(b.balance)}</span></div>
       </div>
     </div>
     <div class="hero-cta" style="justify-content: center">
       <a class="btn btn-primary btn-lg" href="index.html">Back to the yacht</a>
-      <button class="btn btn-ghost btn-lg" data-restart data-testid="button-restart">Book another charter</button>
+      <a class="btn btn-ghost btn-lg" href="book.html" data-testid="button-restart">Book another charter</a>
     </div>
   </section>`;
 }
-
-/* ---------- validation ---------- */
 
 function validateDates() {
   const e = exp();
@@ -448,15 +451,6 @@ function validateDetails() {
   return Object.keys(state.errors).length === 0;
 }
 
-function validatePay() {
-  state.errors = {};
-  const v = state.pay;
-  if (v.card.replace(/\D/g, '').length < 15) state.errors.card = 'Enter a valid 16-digit card number.';
-  if (!/^\d{2}\s*\/?\s*\d{2}$/.test(v.exp.trim())) state.errors.exp = 'Use MM / YY.';
-  if (v.cvc.replace(/\D/g, '').length < 3) state.errors.cvc = '3 or 4 digits.';
-  if (v.zip.replace(/\D/g, '').length < 5) state.errors.zip = '5-digit ZIP.';
-  return Object.keys(state.errors).length === 0;
-}
 
 /* ---------- controller ---------- */
 
@@ -522,6 +516,39 @@ function pickDate(day) {
   render();
 }
 
+/* ---------- Stripe checkout ---------- */
+
+async function startCheckout() {
+  state.errors = {};
+  state.processing = true;
+  render();
+
+  try {
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        experience: state.expId,
+        start: isoDate(state.start),
+        end: state.end ? isoDate(state.end) : null,
+        guests: state.guests,
+        addons: state.addons,
+        details: state.details,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) {
+      throw new Error(data.error || 'We could not open checkout. Please try again.');
+    }
+    window.location.assign(data.url);
+  } catch (err) {
+    state.processing = false;
+    state.errors.checkout = err.message;
+    render();
+  }
+}
+
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest('[data-exp], [data-addon], [data-day], [data-cal], [data-next], [data-back], [data-pay-submit], [data-restart]');
   if (!t) return;
@@ -550,22 +577,10 @@ document.addEventListener('click', (ev) => {
     Object.assign(state, {
       step: 0, start: null, end: null, addons: [], guests: 4, ref: null, processing: false, errors: {},
       details: { name: '', email: '', phone: '', occasion: '', notes: '' },
-      pay: { card: '', exp: '', cvc: '', zip: '', name: '' },
     });
     return render();
   }
-  if (t.hasAttribute('data-pay-submit')) {
-    if (!validatePay()) return render();
-    state.processing = true;
-    render();
-    setTimeout(() => {
-      state.processing = false;
-      state.ref = 'KES-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + String(Date.now()).slice(-4);
-      state.step = 5;
-      render();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1500);
-  }
+  if (t.hasAttribute('data-pay-submit')) return startCheckout();
 });
 
 document.addEventListener('input', (ev) => {
@@ -585,10 +600,45 @@ document.addEventListener('change', (ev) => {
 document.getElementById('header').innerHTML = renderHeader(false);
 document.getElementById('footer').innerHTML = renderFooter();
 
-const hash = location.hash.replace('#', '');
-if (EXPERIENCES.some((e) => e.id === hash)) {
-  state.expId = hash;
-  state.step = 1;
+const params = new URLSearchParams(location.search);
+const returnedRef = params.get('ref');
+const returnStatus = params.get('status');
+
+if (returnStatus === 'confirmed' && returnedRef) {
+  state.step = 5;
+  loadBooking(returnedRef);
+} else {
+  if (returnStatus === 'cancelled') state.errors.checkout = 'Checkout was cancelled \u2014 nothing was charged. Your selections are still here.';
+  const hash = location.hash.replace('#', '');
+  if (EXPERIENCES.some((e) => e.id === hash)) {
+    state.expId = hash;
+    state.step = 1;
+  }
+}
+
+/*
+ * The webhook that flips a booking to "confirmed" can land a moment after the
+ * guest gets redirected back, so poll briefly rather than showing a stale state.
+ */
+async function loadBooking(ref, attempt = 0) {
+  try {
+    const res = await fetch(`/api/booking/${encodeURIComponent(ref)}`);
+    if (res.ok) {
+      state.booking = await res.json();
+      render();
+      if (state.booking.status !== 'confirmed' && attempt < 6) {
+        return setTimeout(() => loadBooking(ref, attempt + 1), 2000);
+      }
+      return;
+    }
+  } catch (err) {
+    /* fall through to retry */
+  }
+  if (attempt < 6) return setTimeout(() => loadBooking(ref, attempt + 1), 2000);
+  state.booking = null;
+  state.errors.checkout = `We could not load booking ${ref}. Email crew@aboardkestrel.com and we will confirm it by hand.`;
+  state.step = 4;
+  render();
 }
 
 render();

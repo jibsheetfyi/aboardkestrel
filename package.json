@@ -1,0 +1,19 @@
+{
+  "name": "aboardkestrel",
+  "version": "1.0.0",
+  "description": "Charter booking site for S/Y Kestrel, Marina del Rey",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "collect-balances": "node jobs/collect-balances.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2",
+    "stripe": "^17.7.0"
+  }
+}
