@@ -4,7 +4,7 @@ const KESTREL = {
   name: 'Kestrel',
   tagline: 'Marina del Rey',
   phone: '(310) 555-0178',
-  email: 'crew@kestrelcharters.com',
+  email: 'crew@aboardkestrel.com',
   slip: 'Basin D, Marina del Rey, California',
 };
 
