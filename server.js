@@ -141,6 +141,11 @@ app.post('/api/checkout', async (req, res) => {
         description: `Aboard Kestrel ${ref} — ${experience.name} deposit`,
         metadata: { reference: ref, kind: 'deposit' },
       },
+      // Managed Payments is on by default for this account, but it takes over
+      // payment configuration and is incompatible with custom_text and with
+      // saving a card for a later off-session charge — both of which the
+      // deposit/balance model depends on.
+      managed_payments: { enabled: false },
       // Guests should not be able to pay a deposit and then vanish; we need a
       // reachable address and a billing address for tax and chargeback defense.
       billing_address_collection: 'required',
