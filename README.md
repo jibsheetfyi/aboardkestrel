@@ -34,7 +34,7 @@ Static HTML, CSS, and vanilla JS. No build step, no dependencies, no backend.
 ## Local development
 
 ```
-python3 -m http.server 8099
+cd aboardkestrel && python3 -m http.server 8099
 ```
 
 Then open http://localhost:8099
